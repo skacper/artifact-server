@@ -44,13 +44,13 @@
 
 **Files:** none committed. Results go into the Inbox thread "artifact-server rollout" (create it with `project_path` = this fork; the skill `plannotator` covers `send_message`).
 
-- [ ] **Step 1: Check R2 is enabled on the account.**
+- [ ] **Step 1: Check R2 is enabled on the account.** Recorded 2026-11-04: **disabled** (10042) — owner action requested in the Inbox.
   Run with the stack's API token (owner-only vault, via `op-cto exec --`):
   `curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2/buckets | jq '.success, .errors'`
   Expected: `true`, `[]`. A 403/10042 means R2 is off → send an Inbox `:::question` ("Enable R2 in the dashboard? It is needed for every stage") and stop P0 until answered.
 - [ ] **Step 2: Find or define the Alchemy credential.** Look in 1Password for a Cloudflare API token usable by Alchemy (Workers, D1, R2, DNS, Workers Routes, Secrets Store, Account Settings read). If none, create a scoped token through the Cloudflare API from the stack's token, store it as `op://<owner vault>/artifact-server-alchemy/credential`. Never use `alchemy login`/`wrangler login` interactively.
-- [ ] **Step 3: Check whether the Alchemy state store exists** (`alchemy cloudflare bootstrap` is account-level and writes Secrets Store). Run `pnpm exec alchemy plan` dry against an empty stage only after Task 2; if bootstrap is needed, include it in the first Inbox approval request.
-- [ ] **Step 4: Read IdP IDs.** `GET /accounts/$ACCOUNT_ID/access/identity_providers` → record the IDs and types of Google and `onetimepin`, and the Zero Trust team domain. Expected: both exist (onetimepin is already enabled per `access_policies.tf` comment).
+- [ ] **Step 3: Check whether the Alchemy state store exists** (recorded 2026-11-04: no Secrets Store and no Alchemy worker on the account → bootstrap required, approval with the first plan) (`alchemy cloudflare bootstrap` is account-level and writes Secrets Store). Run `pnpm exec alchemy plan` dry against an empty stage only after Task 2; if bootstrap is needed, include it in the first Inbox approval request.
+- [ ] **Step 4: Read IdP IDs.** `GET /accounts/$ACCOUNT_ID/access/identity_providers` → recorded 2026-11-04: `onetimepin` `d2c39cd4-3b63-44a7-86a0-8efc4b7069c0`, Microsoft Entra (`azureAD`) `62ac5997-f1f6-48f2-87cd-1770253053e2`; no Google IdP exists (spec D3 said Google — the team IdP is Microsoft Entra); team domain `adcookie.cloudflareaccess.com`.
 - [ ] **Step 5: Post the preflight summary to the Inbox thread** (no secrets): R2 status, token item path, state store status, IdP IDs, team domain.
 
 ### Task 2: Terraform — probe Access OIDC app (adcookie-infra)
@@ -64,7 +64,7 @@
 - Produces: Terraform outputs `artifact_server_oidc` = map stage → `{ client_id, issuer }` (non-sensitive) and `artifact_server_oidc_client_secrets` (sensitive, map stage → secret); 1Password item `op://<owner vault>/artifact-server-<stage>-oidc/credential`.
 - Produces: variable `artifact_server_probe_second_identity` (string email; the owner's non-adcookie address used as the second commenter via PIN).
 
-- [ ] **Step 1: Write `artifact_server.tf`** with `cloudflare_zero_trust_access_application.artifact_server_probe`: `type = "saas"`, `name = "Artifact Server — probe"`, `saas_app = { auth_type = "oidc", redirect_uris = ["https://artifacts-probe.adcookie.org/auth/callback"], grant_types = ["authorization_code_with_pkce"], scopes = ["openid","email","profile"] }`, `allowed_idps` = Google + onetimepin IDs from Task 1 (managed here, not ignored — this app is new), `auto_redirect_to_identity = false`, policies = existing `tylko kacper` + new account policy `artifact_server_probe_second_identity` (`email` include). Header comment: why SaaS/OIDC and the D4 exception (Alchemy deploys the app stack; Terraform owns only Access).
+- [ ] **Step 1: Write `artifact_server.tf`** with `cloudflare_zero_trust_access_application.artifact_server_probe`: `type = "saas"`, `name = "Artifact Server — probe"`, `saas_app = { auth_type = "oidc", redirect_uris = ["https://artifacts-probe.adcookie.org/auth/callback"], grant_types = ["authorization_code_with_pkce"], scopes = ["openid","email","profile"] }`, `allowed_idps` = Microsoft Entra + onetimepin IDs from Task 1 (managed here, not ignored — this app is new), `auto_redirect_to_identity = false`, policies = existing `tylko kacper` + new account policy `artifact_server_probe_second_identity` (`email` include). Header comment: why SaaS/OIDC and the D4 exception (Alchemy deploys the app stack; Terraform owns only Access).
 - [ ] **Step 2: Add the variable to both tfvars files and outputs.** Issuer output is built as `"https://${var.access_team_domain}/cdn-cgi/access/sso/oidc/${client_id}"`; Task 4 verifies it against discovery.
 - [ ] **Step 3: Validate.** Run `make validate STACK=cloudflare` → `Success! The configuration is valid.`
 - [ ] **Step 4: Plan.** `op-cto exec -- ./scripts/tf.sh cloudflare plan -target=<the new resources> -out=/tmp/cf-artifact-probe.tfplan`. Expected: only creates (1 app, 1 policy), 0 changes, 0 destroys.
@@ -115,7 +115,7 @@ The owner's browser is involved for logins. Drive it with `claude-in-chrome` whe
 - Create (fork, branch `c1-cloudflare-access-live` from `upstream/main`): `project/evidence/cloudflare-access-oidc-2026-11.json` (shape follows `project/evidence/cloudflare-staging-e2e-2026-08-27.json`: `schemaVersion`, `qualification`, `sourceCommit` = `76d2015`, `result`, `environments.probe` with `identityProvider: "cloudflare-access-oidc"`, `checks`, `findings`).
 
 - [ ] **Step 1: Run each check, filling `checks`:**
-  - `accessGoogleLogin` — owner signs in with Google → lands on `/auth/callback` then the signed-in review app; becomes administrator (bootstrap).
+  - `accessMicrosoftLogin` — owner signs in with Microsoft (Entra) → lands on `/auth/callback` then the signed-in review app; becomes administrator (bootstrap).
   - `accessPinLogin` — second identity signs in with the email PIN.
   - `accessPolicyDenial` — an email outside both policies cannot finish Access login.
   - `preAdmissionRefusal` — second identity, before admission: Access passes, Artifact Server refuses; Settings → Members shows no new member.
@@ -161,7 +161,7 @@ The owner's browser is involved for logins. Drive it with `claude-in-chrome` whe
 **Interfaces:**
 - Produces: variable `artifact_server_guest_emails` (`list(string)`, default `[]`, validation: each matches `^[^@\s]+@[^@\s]+$` and none ends with `@adcookie.pl`); output `artifact_server_oidc["guest"]`; 1Password item `artifact-server-guest-oidc`.
 
-- [ ] **Step 1: Import the existing IdPs** (Google, onetimepin) as `cloudflare_zero_trust_access_identity_provider` resources with `import {}` blocks; write their config to match. Plan must show `2 to import, 0 to add, 0 to change, 0 to destroy` — any change means the config does not match yet; fix the HCL, never apply a change to a shared IdP.
+- [ ] **Step 1: Import the existing IdPs** (Microsoft Entra, onetimepin) as `cloudflare_zero_trust_access_identity_provider` resources with `import {}` blocks; write their config to match. Plan must show `2 to import, 0 to add, 0 to change, 0 to destroy` — any change means the config does not match yet; fix the HCL, never apply a change to a shared IdP.
 - [ ] **Step 2: Guest app** `artifact_server_guest` (same shape as probe; redirect `https://review.adcookie.org/auth/callback`; `allowed_idps` = both IdP resource IDs). Policies: existing `tylko kacper` + `artifact_server_guests` (include = emails from the variable; `count = length(var.artifact_server_guest_emails) > 0 ? 1 : 0`; `session_duration = "24h"`). Add the variable with `[]` to **both** tfvars files.
 - [ ] **Step 3:** `make validate STACK=cloudflare`; plan with targets → imports + guest app + nothing else. Inbox → apply. Run `store-oidc-secret.sh guest`. Update `CLAUDE.md` file table. PR, merge.
 
@@ -171,7 +171,7 @@ The owner's browser is involved for logins. Drive it with `claude-in-chrome` whe
 
 - [ ] **Step 1:** Create the guest API token item. `make validate STAGE=guest` → `valid`; issuer equals discovery `issuer`.
 - [ ] **Step 2:** `make plan STAGE=guest` → Inbox approval → `make deploy STAGE=guest` → second plan only `noop`.
-- [ ] **Step 3:** Owner logs in with Google (becomes administrator), issues the owner-agent key (`op://…/artifact-server-guest-agent-key/credential`, 90-day expiry), registers MCP `artifacts-review` in Claude Code and Pi with the header. `make smoke STAGE=guest` → all `ok`.
+- [ ] **Step 3:** Owner logs in with Microsoft (becomes administrator), issues the owner-agent key (`op://…/artifact-server-guest-agent-key/credential`, 90-day expiry), registers MCP `artifacts-review` in Claude Code and Pi with the header. `make smoke STAGE=guest` → all `ok`.
 - [ ] **Step 4:** Commit `stages/guest.json`, PR, merge.
 
 ### Task 10: Guest runbook and lifecycle
