@@ -1571,6 +1571,11 @@ requirements:
         result: pass
         run: project/evidence/local-foundation.json
         recorded_at: "2026-08-18T15:31:35.706Z"
+      - deployment: cloudflare
+        tests: [AUTH-019-B, AUTH-019-F]
+        result: pass
+        run: project/evidence/cloudflare-access-oidc-2026-11.json
+        recorded_at: "2026-11-04T20:35:00.000Z"
 
   - id: AUTH-020
     kind: security

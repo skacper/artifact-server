@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "target": "cloudflare",
   "qualification": "Cloudflare Access as the OIDC provider for the Cloudflare package (live round trip)",
   "sourceCommit": "5af28ac",
   "result": "pass_with_findings",
@@ -92,5 +93,21 @@
     "recovery and restore on this stage",
     "image and video preview behavior"
   ],
-  "secretsIncluded": false
+  "secretsIncluded": false,
+  "testResults": [
+    {
+      "name": "live Cloudflare Access OIDC round trip",
+      "status": "passed",
+      "assertionResults": [
+        {
+          "title": "AUTH-019-B: Cloudflare Access login admitted the bootstrap administrator and a one-time-PIN member against discovery, PKCE and nonce (checks accessMicrosoftLogin, bootstrapAdministratorOnFirstLogin, accessPinLogin, oidcDiscoveryIssuerMatchesConfig)",
+          "status": "passed"
+        },
+        {
+          "title": "AUTH-019-F: an authenticated but unadmitted identity was refused with 403 IDENTITY_ADMISSION_DENIED and no session; an identity outside the Access policy never completed login (checks preAdmissionRefusal, accessPolicyDenial)",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
 }

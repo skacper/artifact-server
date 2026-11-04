@@ -27,8 +27,9 @@ The WorkOS verifier, protected-resource metadata, and browser-login wiring are
 implemented. Live browser approval, refresh, revocation, and named-client
 qualification remain release gates, so this package must not yet be advertised
 as the complete hosted Artifact Server service. The generic OIDC Worker path is
-covered locally, but a live Cloudflare Access round trip is not attached to the
-release ledger.
+covered locally. A live Cloudflare Access round trip, including its findings,
+is recorded in `../../project/evidence/cloudflare-access-oidc-2026-11.json`
+and attached to `AUTH-019`.
 
 The isolated WorkOS staging environment has CIMD, compatibility DCR, the exact
 staging MCP resource, and its callback configured. The secret-free dashboard
@@ -138,6 +139,11 @@ the deployment process resolves the referenced secret into
 `ARTIFACT_SERVER_OIDC_CLIENT_SECRET` before it runs Alchemy. The configuration
 document contains only the stable secret reference, never the secret value.
 
+Cloudflare Access must be a SaaS application that uses OIDC, the
+`authorization_code_with_pkce` grant, and the `openid email profile` scopes. Set
+`oidcIssuer` to `https://<team>.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<client_id>`.
+It must equal the `issuer` in the discovery document byte for byte.
+
 For Cloudflare Access setup and verification, read
 [`Use Cloudflare Access for sign-in`](https://artifactserver.com/docs/deploy/cloudflare-access/).
 The checked-in starting configuration is
@@ -192,6 +198,13 @@ custom domain, a proxied `*.content-domain` DNS record, and a wildcard Worker
 route. Cloudflare custom domains cannot provide the required wildcard content
 host by themselves.
 
+The content domain needs an edge certificate that covers one wildcard level.
+Use the apex of a dedicated zone, such as `example-content.net`. Universal SSL
+covers `*.example-content.net`. A content domain nested under a shared zone, such
+as `content.example.com`, has no Universal SSL certificate for
+`*.content.example.com`, and every content request fails the TLS handshake
+unless you buy Advanced Certificate Manager.
+
 The state store can write during credential recovery or a version upgrade.
 Prepare current cached state credentials before a no-write plan check.
 
@@ -199,6 +212,15 @@ Prepare current cached state credentials before a no-write plan check.
 
 CAUTION: Get approval before you deploy. Public ingress also changes DNS and
 requests edge certificates.
+
+From a fresh checkout, build the web assets first. Run this from the repository
+root:
+
+```sh
+pnpm --filter @artifact-server/web build
+```
+
+Without this build, the deploy fails with `ENOENT` for `dist/web`.
 
 ```sh
 pnpm exec alchemy deploy \

@@ -35,7 +35,7 @@ Configure the OIDC application:
    ```
 
 2. Enable the `openid`, `email`, and `profile` scopes.
-3. Enable Proof Key for Code Exchange (PKCE).
+3. Enable Proof Key for Code Exchange (PKCE). The grant type is `authorization_code_with_pkce`.
 4. Select the identity providers people may use.
 5. Add an Access policy that allows the intended people.
 6. Create the application, then copy its client ID, client secret, and configuration endpoint.
@@ -60,7 +60,7 @@ Add the non-secret OIDC settings and a non-secret reference for the client secre
 }
 ```
 
-Use the exact issuer from Cloudflare's configuration endpoint. Do not copy the client secret into the JSON file.
+Use the exact issuer from Cloudflare's configuration endpoint. It has the form `https://<team>.cloudflareaccess.com/cdn-cgi/access/sso/oidc/<client_id>` and must equal the discovery document's `issuer` byte for byte. Do not copy the client secret into the JSON file.
 
 Resolve the referenced secret into the deployment process environment without
 printing it or adding it to shell history:
@@ -74,6 +74,14 @@ In CI, load the same variable from the approved secret manager. Do not commit
 the value or paste it into an issue.
 
 Do not include `workosClientId`, `workosIssuer`, or `workosApiKeySecretRef` in the same deployment. One installation uses one browser-login provider.
+
+The content domain needs an edge certificate that covers one wildcard level. Use the apex of a dedicated zone, such as `example-content.net`, because Universal SSL covers `*.example-content.net`. A content domain nested under a shared zone, such as `content.example.com`, has no Universal SSL certificate unless you buy Advanced Certificate Manager.
+
+From a fresh checkout, build the web assets from the repository root before you deploy. Otherwise the deploy fails with `ENOENT` for `dist/web`:
+
+```sh
+pnpm --filter @artifact-server/web build
+```
 
 Run the normal Cloudflare lifecycle commands:
 
@@ -93,7 +101,9 @@ Check these outcomes before inviting the team:
 - A person not allowed by the Access policy cannot complete sign-in.
 - A person allowed by Access but not admitted to Artifact Server cannot enter the installation.
 
-The Worker test suite covers the generic OIDC path and Cloudflare-shaped issuer URLs. A live Cloudflare Access round trip is not yet attached to the release ledger. Verify the flow in a non-production stage before using it in production.
+The Worker test suite covers the generic OIDC path and Cloudflare-shaped issuer URLs. A live Cloudflare Access round trip is recorded in `project/evidence/cloudflare-access-oidc-2026-11.json` and attached to `AUTH-019`. Verify the flow in a non-production stage before using it in production.
+
+Cloudflare Access SaaS applications do not reuse an existing Access session for a new authorization. A person who signs in with a one-time PIN receives a new code on each login.
 
 ## Connect remote agents
 
