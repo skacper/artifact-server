@@ -58,7 +58,7 @@
     "accessPolicyDenial": "An address outside every Access policy reaches the same 'enter your code' screen (no enumeration) and never receives a code, so the login cannot complete.",
     "preAdmissionRefusal": "Access authenticates the identity; /auth/callback answers 403 IDENTITY_ADMISSION_DENIED, sets no session cookie, and the member list is unchanged.",
     "accessDiscovery": "The Access discovery document reports code_challenge_methods_supported as null; the server's PKCE S256 flow completed regardless.",
-    "contentHostRefusesApplicationRoutes": "Checked on a token-shaped content host: /api/projects, /mcp and /auth/login answer 404 VERSION_NOT_FOUND or 405."
+    "contentHostRefusesApplicationRoutes": "Application routes requested on a content host (/api/projects, /mcp, /auth/login) answer 404 VERSION_NOT_FOUND or 405 instead of serving the application."
   },
   "findings": [
     {
@@ -68,7 +68,7 @@
     },
     {
       "id": "ACC-002",
-      "status": "open",
+      "status": "documented",
       "summary": "alchemy deploy from a fresh checkout fails with ENOENT dist/web: the Worker serves the web build as assets, but only pnpm check (pretest) builds it. The README deploy steps should build @artifact-server/web first, or the stack should."
     },
     {
