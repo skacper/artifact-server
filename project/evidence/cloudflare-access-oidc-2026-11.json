@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "qualification": "Cloudflare Access as the OIDC provider for the Cloudflare package (live round trip)",
+  "sourceCommit": "5af28ac",
+  "result": "pass_with_findings",
+  "environments": {
+    "probe": {
+      "applicationUrl": "https://artifacts-probe.adcookie.org",
+      "contentDomain": "link-00.link",
+      "accessMode": "private_team",
+      "identityProvider": "cloudflare-access-oidc",
+      "accessApplicationType": "saas_oidc",
+      "accessGrantTypes": [
+        "authorization_code_with_pkce"
+      ],
+      "accessScopes": [
+        "openid",
+        "email",
+        "profile"
+      ],
+      "accessIdentityProviders": [
+        "azureAD",
+        "onetimepin"
+      ],
+      "records": "d1",
+      "objects": "r2",
+      "worker": "artifact-server-artifacts-probe-development-probe-worker",
+      "deployTool": "alchemy 2.0.0-beta.79 (repository pin)",
+      "stateStore": "cloudflare (alchemy provider cloudflare bootstrap)"
+    }
+  },
+  "runtime": {
+    "pi": "1.4.0",
+    "claudeCode": "2.1.318",
+    "mcpToolCount": 33
+  },
+  "checks": {
+    "oidcDiscoveryIssuerMatchesConfig": "pass",
+    "accessMicrosoftLogin": "pass",
+    "bootstrapAdministratorOnFirstLogin": "pass",
+    "accessPinLogin": "pass",
+    "accessPolicyDenial": "pass",
+    "preAdmissionRefusal": "pass",
+    "admission": "pass",
+    "apiKeyIssue": "pass",
+    "mcpPublishClaudeCode": "pass",
+    "mcpPublishPi": "pass",
+    "contentServedFromContentDomain": "pass",
+    "secondIdentityComment": "pass",
+    "agentReadsRepliesResolves": "pass",
+    "healthReadiness": "pass",
+    "contentHostRefusesApplicationRoutes": "pass",
+    "mcpUnauthenticatedRejected": "pass",
+    "postDeployPlanNoChanges": "pass"
+  },
+  "notes": {
+    "accessPolicyDenial": "An address outside every Access policy reaches the same 'enter your code' screen (no enumeration) and never receives a code, so the login cannot complete.",
+    "preAdmissionRefusal": "Access authenticates the identity; /auth/callback answers 403 IDENTITY_ADMISSION_DENIED, sets no session cookie, and the member list is unchanged.",
+    "accessDiscovery": "The Access discovery document reports code_challenge_methods_supported as null; the server's PKCE S256 flow completed regardless.",
+    "contentHostRefusesApplicationRoutes": "Checked on a token-shaped content host: /api/projects, /mcp and /auth/login answer 404 VERSION_NOT_FOUND or 405."
+  },
+  "findings": [
+    {
+      "id": "ACC-001",
+      "status": "documented",
+      "summary": "The content domain must be covered by an edge certificate for one wildcard level. A content domain nested under a shared zone (*.content.example.com) has no Universal SSL certificate and every content request fails the TLS handshake; the zone apex of a dedicated domain works with the free certificate. The Cloudflare README does not say this."
+    },
+    {
+      "id": "ACC-002",
+      "status": "open",
+      "summary": "alchemy deploy from a fresh checkout fails with ENOENT dist/web: the Worker serves the web build as assets, but only pnpm check (pretest) builds it. The README deploy steps should build @artifact-server/web first, or the stack should."
+    },
+    {
+      "id": "ACC-003",
+      "status": "open",
+      "summary": "An identity that Access authenticates but the server has not admitted sees raw JSON (403 IDENTITY_ADMISSION_DENIED) at /auth/callback instead of a readable page."
+    },
+    {
+      "id": "ACC-004",
+      "status": "open",
+      "summary": "A login started directly at /auth/login (no return path) can land on /api/v1/session JSON after the callback instead of the review application."
+    },
+    {
+      "id": "ACC-005",
+      "status": "documented",
+      "summary": "Cloudflare Access SaaS OIDC applications do not reuse an existing Access session for a new authorization: a one-time-PIN user receives a new code on each login."
+    }
+  ],
+  "notQualifiedInThisRun": [
+    "Claude Code Channels and Pi live dispatch delivery",
+    "session refresh, revocation, and Access policy changes during an active session",
+    "recovery and restore on this stage",
+    "image and video preview behavior"
+  ],
+  "secretsIncluded": false
+}
