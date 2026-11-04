@@ -58,7 +58,7 @@ changes to mehos, replacing Workspaces if it ships.
 | D2 | Run it on Cloudflare (Worker + D1 + R2) | It is the author's primary hosted target; a second (guest) installation is a second stage at near-zero cost; nothing to patch on vps-main. |
 | D3 | Cloudflare Access is the OIDC provider (Google for the team, one-time email PIN for guests) | No new identity service; outsiders need no account; Access is already managed in Terraform. Agents use artifact-server API keys (generic OIDC on Cloudflare has no MCP OAuth). |
 | D4 | Deploy the stack with upstream Alchemy; only Access and identity providers in Terraform | Upstream migrations and the D1 schema run through their deploy; rewriting it in Terraform means owning a deploy for an app that keeps changing. Recorded as a narrow, documented exception to "Terraform = cloud, DNS, Access" in `adcookie-infra`. |
-| D5 | Outsiders get a separate guest installation until per-project access exists | Strong isolation now, no fork patch needed. The guest installation is retired once per-project access is released (upstream or in our fork). |
+| D5 | The outside-person (guest) flow is the first priority, delivered right after the spike: a separate guest installation now, and guest reviewer access scoped to projects as the first product contribution | The owner rated guest reviews as more important now than team work. The separate installation gives strong isolation with no fork patch. It is retired once project-scoped guest access (C2) is released, upstream or in our fork. |
 | D6 | Backups: D1 Time Travel + weekly export of D1 and R2 to GCS | Files live only in R2 and R2 has no snapshots; GCS is the house object store (WIF, no static keys). |
 | D7 | Contribute upstream from the fork `skacper/artifact-server`; our fork's `main` carries patches only while they wait for a merge | Upstream contributions from a personal fork are the norm; a fork `main` with our patches is the fallback if upstream stays stalled. |
 
@@ -73,11 +73,11 @@ requirement ID, evidence in `project/evidence/`, and a green `pnpm verify:iterat
 | ID | Contribution | Upstream form | Notes |
 | --- | --- | --- | --- |
 | C1 | Live qualification of Cloudflare Access as the OIDC provider on the Cloudflare package | Evidence record in `project/evidence/` (no secrets), ledger entry, fixes to `deploy/cloudflare/README.md` and the public guide | The README states that a live Access round trip "is not attached to the release ledger". We need it anyway; it is the cheapest first PR. |
-| C2 | Per-project access: members of a project, not only of the installation | New ADR partly superseding 0015; ledger requirements; implementation in the application core and every persistence adapter (SQLite, Postgres, D1); review UI and MCP listing scoped by project | The largest piece. Discuss it in an upstream issue before coding (CONTRIBUTING asks for discussion before larger features). It lets one installation serve outsiders, which removes D5. |
+| C2 | Guest reviewers scoped to projects: a `guest` role that sees and comments only on the projects it is granted, cannot publish, manage or list other projects; full per-project membership for regular members is a later step on the same model | New ADR partly superseding 0015; ledger requirements; implementation in the application core and every persistence adapter (SQLite, Postgres, D1); review UI and MCP listing scoped by grant | The guest role comes first because it is the narrowest change that serves outsiders. Discuss it in an upstream issue before coding (CONTRIBUTING asks for discussion before larger features). It lets one installation serve outsiders, which removes the guest installation (D5). |
 | C3 | Markdown preview in Review (#78) | PR building on, or co-authored with, the #78 prototype; Preview/Source views; comments on rendered Markdown | Coordinate with the #78 author first, to avoid a duplicate PR. |
 | C4 | Scheduled export of a running installation's D1 + R2 to any S3-compatible target or a local directory | Command in `deploy/cloudflare/scripts`, documented next to `RECOVERY.md`; restore compatible with the existing recovery command | Must not require stopping the installation (unlike the recovery command); consistency rules documented. |
 
-Order: C1 → C4 → C3 → C2. The small, evidence-only work goes first, to build trust with the maintainers.
+Order: C1 → C2 issue (discussion opened early, because guests are the priority) → C4 → C3 → C2 implementation. The small, evidence-only work goes first, to build trust with the maintainers.
 Our deployment depends on C1 being proved (by us) and on C4 existing, at least in our fork.
 
 ### 4.2 Our deployment (adcookie, thin)
@@ -134,13 +134,17 @@ The runbook covers this as one checklist.
   - Record the evidence for C1.
   - Destroy the stage.
   - Exit criteria: every step above works, or a blocking upstream defect is filed with a reproduction.
-- **P1 Team installation.** Terraform Access, the `team` stage, members, API keys, the runbook, the card,
-  and the skill note. Krzysztof connects his agents.
-- **P2 Backups.** C4 in the fork, the weekly CI job to GCS, and one restore test into empty targets
-  (per upstream `RECOVERY.md`).
-- **P3 Guest installation** and the guest lifecycle checklist; the first real outside review.
-- **P4 Upstream contributions** C1, C4, C3, then C2: an issue first, then a PR. When C2 is released, retire
-  the guest installation.
+- **P1 Guest installation (priority).**
+  - Terraform Access with the one-time PIN identity provider and the guest email list variable.
+  - The `guest` stage, the guest lifecycle checklist in the runbook, and the first real outside review.
+  - Guest material is short-lived; D1 Time Travel covers it until P3.
+  - Open the C2 issue upstream now.
+- **P2 Team installation.** The `team` stage, members (owner, Krzysztof), API keys, the card and the skill
+  note. Krzysztof connects his agents.
+- **P3 Backups.** C4 in the fork, the weekly CI job to GCS for both stages, and one restore test into
+  empty targets (per upstream `RECOVERY.md`).
+- **P4 Upstream contributions:** C1 and C4, then C3, then the C2 implementation. When C2 is released,
+  retire the guest installation and move guests into `team` with the guest role.
 
 ## 6. Testing and verification
 
@@ -150,7 +154,7 @@ The runbook covers this as one checklist.
 - Deployment: `alchemy plan` reviewed before every deploy. After a deploy, a scripted probe checks the
   application health endpoint, the content host isolation (application routes unavailable on the content
   domain), and an MCP `list` with an API key.
-- Backups: a restore test into empty D1/R2 before P1 counts as done, repeated after storage changes.
+- Backups: a restore test into empty D1/R2 before P3 counts as done, repeated after storage changes.
 
 ## 7. Risks
 
@@ -160,6 +164,7 @@ The runbook covers this as one checklist.
 | Alchemy 2.0 is beta and a second infrastructure tool | One stack only, pinned versions (as upstream pins them), plan before every apply, exception documented. |
 | Upstream stays stalled; our PRs wait | The fork's `main` carries the patches; the deployment pins a fork commit; we offer co-maintenance in #118. |
 | Membership is installation-wide until C2 | The guest installation (D5); never admit an outsider to `team`. |
+| Guest data before backups exist (P1 before P3) | Guest material is short-lived and also kept by the publishing agent's repo; D1 Time Travel covers records. |
 | Workspaces ships and makes this redundant | Agents use a skill and MCP, so switching is cheap; the owner is on the Workspaces waitlist. |
 
 ## 8. Repositories and working rules
