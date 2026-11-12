@@ -1,1 +1,0 @@
-{plugins: {version: 2, packages: {cloudflare: {bindings: {claude: {imported: true}}}}}}
